@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Prepare package.json
@@ -50,11 +50,19 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
+      # electron не прописан в package.json (по README ставится вручную) —
+      # без этого шага electron-builder не может определить версию Electron.
+      - name: Install Electron
+        run: npm install --no-save electron@28.3.3
+
       - name: Build frontend
         run: npm run build
 
+      # Версия electron-builder закреплена (24.13.3, как в README) —
+      # у последней 26.x на Windows/pwsh ломается разбор "-c.publish=never",
+      # поэтому используем длинный флаг --publish never.
       - name: Build Electron app
-        run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }} ${{ matrix.arch_flags }} -c.publish=never
+        run: npx electron-builder@24.13.3 --config electron-builder.yml --${{ matrix.platform }} ${{ matrix.arch_flags }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
