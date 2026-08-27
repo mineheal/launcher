@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: ${{ matrix.os }}
@@ -15,10 +18,10 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            arch: x64+arm64
+            arch_flags: "--x64 --arm64"
           - os: windows-latest
             platform: win
-            arch: x64
+            arch_flags: "--x64"
 
     steps:
       - uses: actions/checkout@v4
@@ -47,14 +50,8 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      - name: Install Snapcraft (Ubuntu only)
-        if: matrix.os == 'ubuntu-latest'
-        uses: samuelmeuli/action-snapcraft@v2
-        with:
-          use-lxd: true
-
       - name: Build Electron app
-        run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }} --${{ matrix.arch }} -c.publish=never
+        run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }} ${{ matrix.arch_flags }} -c.publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -62,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-build
-          path: dist/**
+          path: dist/*
           retention-days: 30
 
   release:
@@ -81,8 +78,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: 1.0
-          name: "Релиз 1.0"
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Релиз 1.0 (сборка #${{ github.run_number }})"
           body: |
             ## Сборка релиза
             - Windows: NSIS и Portable версии
