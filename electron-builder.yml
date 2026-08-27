@@ -1,5 +1,6 @@
 # MineHeal Launcher — конфигурация сборки (electron-builder)
 # main подтягивается через extraMetadata, чтобы не трогать package.json
+
 appId: ru.mineheal.launcher
 productName: MineHeal
 copyright: Copyright © 2026 MineHeal
@@ -19,15 +20,17 @@ extraMetadata:
 asar: true
 compression: maximum
 
-# ── Windows 10/11, только x64 ──
+# ── Windows 10/11: x64 + arm64 ──
 win:
   target:
     - target: nsis
       arch:
         - x64
+        - arm64
     - target: portable
       arch:
         - x64
+        - arm64
 
 nsis:
   oneClick: false
