@@ -1,102 +1,97 @@
-# ═══════════════════════════════════════════════════════════════
-# MineHeal Launcher — автосборка и публикация в Release с тегом 1.0
-#
-# Срабатывает при:
-#   git tag 1.0 && git push origin 1.0
-# либо вручную (Actions → Build & Release → Run workflow).
-#
-# Артефакты:
-#   Windows x64 : MineHeal-Setup-1.0.0-x64.exe (NSIS) + Portable
-#   Linux  x64  : AppImage / deb / rpm
-#   Linux  arm64: AppImage / deb / rpm
-# Минимальные ОС: Windows 10 / 11 (x64), современные дистро Linux.
-# ═══════════════════════════════════════════════════════════════
 name: Build & Release
 
 on:
   push:
-    tags:
-      - "1.0"
+    branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  windows:
-    name: Windows x64 (NSIS + Portable)
-    runs-on: windows-latest
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64+arm64
+          - os: windows-latest
+            platform: win
+            arch: x64
+
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Prepare package.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '1.0.0';
+            pkg.description = 'Launcher application';
+            pkg.author = 'mineheal';
+            pkg.main = 'electron/main.cjs';
+            pkg.name = 'launcher';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
 
       - name: Install dependencies
-        shell: pwsh
-        run: |
-          npm ci
-          npm install --save-dev electron@28.3.3 electron-builder@24.13.3
+        run: npm ci || npm install
 
-      - name: Build renderer (Vite)
-        run: npx vite build
+      - name: Install Snapcraft (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        uses: samuelmeuli/action-snapcraft@v2
+        with:
+          use-lxd: true
 
-      - name: Package Windows x64
-        run: npx electron-builder --config electron-builder.yml --win --x64
+      - name: Build Electron app
+        run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }} --${{ matrix.arch }} -c.publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to Release 1.0
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: "1.0"
-          name: "MineHeal Launcher 1.0"
-          body: |
-            Официальный лаунчер сервера **MineHeal** (Forge 1.12.2).
+          name: ${{ matrix.os }}-build
+          path: dist/**
+          retention-days: 30
 
-            **Windows (10/11, x64):**
-            - `MineHeal-Setup-…-x64.exe` — установщик (NSIS)
-            - `MineHeal-…-x64-Portable.exe` — портативная версия без установки
-
-            **Linux (x64 / arm64):** AppImage, deb, rpm — в файлах релиза.
-
-            Игра ставится в `%APPDATA%\.mineheal` и не трогает обычный Minecraft.
-          generate_release_notes: false
-          make_latest: true
-          files: |
-            release/*.exe
-
-  linux:
-    name: Linux x64 + arm64 (AppImage/deb/rpm)
+  release:
+    needs: build-and-release
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          node-version: 20
+          path: ./artifacts
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm install --save-dev electron@28.3.3 electron-builder@24.13.3
-
-      - name: Build renderer (Vite)
-        run: npx vite build
-
-      - name: Package Linux x64 + arm64
-        run: npx electron-builder --config electron-builder.yml --linux --x64 --arm64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to Release 1.0
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "1.0"
-          name: "MineHeal Launcher 1.0"
-          make_latest: true
+          tag_name: 1.0
+          name: "Релиз 1.0"
+          body: |
+            ## Сборка релиза
+            - Windows: NSIS и Portable версии
+            - Linux: AppImage, deb, rpm (x64 и arm64)
+            
+            Автоматическая сборка через GitHub Actions
           files: |
-            release/*.AppImage
-            release/*.deb
-            release/*.rpm
+            ./artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
