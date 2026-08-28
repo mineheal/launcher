@@ -1,4 +1,4 @@
-# MineHeal Launcher 1.1
+# MineHeal Launcher
 
 Лаунчер сервера **MineHeal** на Electron + React. Устанавливает спец-сборку **Forge 1.12.2**
 в отдельную папку `%APPDATA%\.mineheal` (обычный Minecraft не трогается), ставит моды
